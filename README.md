@@ -75,19 +75,27 @@ pip install boto3 pyyaml
 PDF·엑셀·사진 같은 무거운 원본은 git 에 넣으면 안 됩니다(레포가 부풀고, 100MB 제한에 걸리고,
 diff 가 의미 없습니다). **텍스트는 git 에, 무거운 원본은 오브젝트 스토리지에** 둡니다.
 
-홈서버에서 아래 한 장이면 끝납니다.
+MinIO 는 그 오브젝트 스토리지를 내 홈서버에 올리는 프로그램입니다. AWS S3 와 같은 방식으로
+말을 주고받기 때문에, 나중에 다른 저장소로 옮기더라도 이 위키는 그대로 씁니다.
+
+#### 3-1. 올리기
+
+```bash
+mkdir -p ~/minio && cd ~/minio
+```
+
+`~/minio/docker-compose.yml` 을 아래 내용으로 만듭니다. **`<...>` 두 줄만 여러분 값으로 바꾸세요.**
 
 ```yaml
-# ~/minio/docker-compose.yml
 services:
   minio:
     image: quay.io/minio/minio:latest
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: <내가-정한-아이디>
+      MINIO_ROOT_USER: <내가-정한-아이디-3자이상>
       MINIO_ROOT_PASSWORD: <내가-정한-비밀번호-8자이상>
     volumes:
-      - ./data:/data
+      - ./data:/data          # 실제 파일이 쌓이는 곳 = ~/minio/data
     ports:
       # 앞의 127.0.0.1 이 핵심입니다 — 이 기기 안에서만 열립니다
       - "127.0.0.1:9000:9000"    # API — 이 위키가 쓰는 포트
@@ -96,17 +104,46 @@ services:
 ```
 
 ```bash
-cd ~/minio && docker compose up -d
+docker compose up -d
+docker compose ps            # State 가 running / Up 이면 성공
 ```
 
 > 🔒 **`127.0.0.1:` 을 빼지 마세요.** 그냥 `"9000:9000"` 으로 두면 **같은 공유기에 붙은 아무 기기나**
 > 여러분의 저장소에 닿습니다. 다른 기기에서 쓰고 싶으면 포트를 여는 게 아니라
 > **Tailscale 로 그 홈서버에 들어와서** 씁니다. 공유기 포트포워딩은 하지 않습니다.
 
-> 🔑 **위 `MINIO_ROOT_*` 는 관리자 계정입니다 — 위키에 그대로 쓰지 마세요.**
-> 콘솔(`http://localhost:9001`)에 로그인해 **Access Keys → Create** 로 키를 하나 더 만들고,
-> 다음 단계에는 **그 키**를 넣으세요. 그래야 `.env` 가 새더라도 저장소 전체의 관리자 권한까지
-> 넘어가지 않습니다.
+#### 3-2. 떴는지 확인
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:9000/minio/health/live
+```
+
+**`200`** 이 나와야 합니다. 아니라면:
+
+| 나온 것 | 뜻·해볼 것 |
+|---|---|
+| `000` (연결 실패) | 아직 안 떴거나 죽었습니다 → `docker compose ps` · `docker compose logs --tail=30` |
+| `docker: command not found` | 1강의 Docker 설치를 안 끝냈습니다 |
+| `permission denied ... docker.sock` | `sudo usermod -aG docker $USER` 후 **로그아웃·재로그인** |
+| 포트가 이미 쓰임 | 다른 프로그램이 9000 을 씁니다 → compose 의 앞 숫자만 `127.0.0.1:9010:9000` 처럼 바꾸고, 4단계에서 그 포트를 넣으세요 |
+
+#### 3-3. 🔑 위키용 키 따로 만들기 (관리자 키를 그대로 쓰지 않습니다)
+
+위에서 정한 `MINIO_ROOT_*` 는 **저장소 전체의 관리자 계정**입니다. `.env` 한 장이 새면 전부
+넘어가므로, 위키가 쓸 키는 따로 만듭니다.
+
+1. 브라우저로 **`http://<홈서버주소>:9001`** 을 엽니다.
+   - 홈서버에서 직접 보고 있다면 `http://localhost:9001`
+   - 다른 기기(노트북·폰)에서 본다면 **Tailscale 로 연결한 뒤** 그 홈서버 이름으로 접속합니다.
+     `127.0.0.1` 로 묶어 뒀으므로 SSH 터널을 쓰는 방법도 있습니다:
+     `ssh -L 9001:127.0.0.1:9001 -L 9000:127.0.0.1:9000 <사용자>@<홈서버>` 후 노트북에서 `localhost:9001`
+2. `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` 로 로그인합니다.
+3. 왼쪽 메뉴 **Access Keys → Create access key → Create**.
+4. 화면에 뜬 **Access Key** 와 **Secret Key** 를 복사해 둡니다.
+   🔴 **Secret Key 는 이 화면에서만 보입니다.** 창을 닫으면 다시 못 봅니다 — 못 봤으면 지우고 다시 만드세요.
+5. 다음 단계(`init.py`)에는 **이 키**를 넣습니다. 관리자 아이디/비밀번호가 아닙니다.
+
+> 버킷은 미리 만들지 않아도 됩니다 — `init.py` 가 없으면 만들고 versioning 까지 켭니다.
 
 ### 4. 첫 실행
 
