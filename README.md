@@ -24,32 +24,13 @@
 
 ---
 
-## 시작하기 — 4단계
+## 시작하기 — 5단계
 
 ### 0. 준비물
 
 - **1강에서 만든 홈서버** (Docker 가 도는 리눅스 박스)
-- **Python 3.10 이상** 과 패키지 두 개 (`boto3`·`pyyaml`)
+- **Python 3.10 이상** — `python3 --version` 으로 확인하세요
 - Claude Code (또는 같은 방식으로 스킬을 읽는 에이전트)
-
-```bash
-python3 --version          # 3.10 이상이어야 합니다
-pip install boto3 pyyaml
-```
-
-> ⚠️ **`error: externally-managed-environment` 가 뜨면** 잘못한 게 아닙니다.
-> 요즘 우분투·데비안은 시스템 파이썬에 직접 설치하는 걸 막습니다. 셋 중 하나로 가세요.
->
-> ```bash
-> # ① 배포판 패키지로 (가장 간단)
-> sudo apt install -y python3-boto3 python3-yaml
->
-> # ② 이 폴더 전용 가상환경으로 (가장 깔끔 — 다음부터 python3 대신 .venv/bin/python 을 씁니다)
-> python3 -m venv .venv && .venv/bin/pip install boto3 pyyaml
->
-> # ③ 그냥 밀어붙이기 (빠르지만 시스템 파이썬을 건드립니다)
-> pip install --break-system-packages boto3 pyyaml
-> ```
 
 ### 1. 클론하고 **내 레포로** 만들기
 
@@ -67,7 +48,29 @@ git add . && git commit -m "내 위키 시작"
 > 개인 위키에는 판단·금액·관계가 쌓입니다. 나중에 지워도 **git 히스토리에는 남습니다.**
 > 처음부터 private 이 유일하게 안전한 선택입니다.
 
-### 2. 무거운 파일 저장소(MinIO) 올리기
+### 2. 파이썬 패키지 설치 — **레포 폴더 안에서**
+
+```bash
+# my-wiki 폴더 안입니다
+python3 -m venv .venv
+source .venv/bin/activate      # ← 프롬프트 앞에 (.venv) 가 붙습니다
+pip install boto3 pyyaml
+```
+
+> 🔴 **새 터미널을 열 때마다 `source .venv/bin/activate` 를 다시 해 주세요.**
+> 안 하면 아래 명령들이 `boto3 가 없습니다` 로 실패합니다. 프롬프트 앞의 `(.venv)` 가 표시등입니다.
+>
+> venv 를 쓰는 이유: 요즘 우분투·데비안은 시스템 파이썬에 직접 설치하는 걸 막아서
+> (`error: externally-managed-environment`) `pip install` 이 그냥은 안 됩니다.
+> venv 를 만들면 그 제약을 피하면서 시스템도 안 건드립니다.
+>
+> venv 가 싫으면 둘 중 하나로 대신할 수 있습니다. 그때는 `activate` 없이 그냥 `python3` 를 씁니다.
+> ```bash
+> sudo apt install -y python3-boto3 python3-yaml      # 배포판 패키지로
+> pip install --break-system-packages boto3 pyyaml    # 시스템 파이썬을 건드려서라도
+> ```
+
+### 3. 무거운 파일 저장소(MinIO) 올리기
 
 PDF·엑셀·사진 같은 무거운 원본은 git 에 넣으면 안 됩니다(레포가 부풀고, 100MB 제한에 걸리고,
 diff 가 의미 없습니다). **텍스트는 git 에, 무거운 원본은 오브젝트 스토리지에** 둡니다.
@@ -105,7 +108,7 @@ cd ~/minio && docker compose up -d
 > 다음 단계에는 **그 키**를 넣으세요. 그래야 `.env` 가 새더라도 저장소 전체의 관리자 권한까지
 > 넘어가지 않습니다.
 
-### 3. 첫 실행
+### 4. 첫 실행
 
 ```bash
 python3 engine/scripts/init.py
@@ -114,7 +117,7 @@ python3 engine/scripts/init.py
 MinIO 주소와 키를 묻고, `.env` 를 만들고(git 에 안 올라갑니다), 버킷을 만들고,
 **실제로 파일을 넣었다 빼 보고** 연결을 확인합니다. 여기서 초록이 나오면 준비 끝입니다.
 
-### 4. 에이전트에게 첫 마디
+### 5. 에이전트에게 첫 마디
 
 이 폴더에서 Claude Code 를 열고:
 
@@ -164,8 +167,8 @@ engine/scripts/      도구 (vault 밖이라 옵시디언에 안 보입니다)
 
 | 증상 | 원인·해결 |
 |---|---|
-| `error: externally-managed-environment` | 0단계의 ①②③ 중 하나로 (README 맨 위) |
-| `ModuleNotFoundError: No module named 'yaml'` 또는 `'boto3'` | 같은 원인 — 0단계의 설치가 안 끝났습니다 |
+| `❌ boto3 가 없습니다` / `❌ pyyaml 이 없습니다` | 대개 **venv 활성화를 잊은 것**입니다. 프롬프트에 `(.venv)` 가 없으면 `source .venv/bin/activate` |
+| `error: externally-managed-environment` | 2단계의 venv 로 가거나, 거기 적힌 두 대안 중 하나로 |
 | `자격증명이 주입되지 않았습니다` | `set -a; . ./.env; set +a` 를 먼저. `.env` 가 없으면 `init.py` |
 | `❌ MinIO 에 닿지 않습니다` | 주소·포트 오타이거나 MinIO 가 안 떠 있습니다 (`docker compose ps`). 다른 기기면 Tailscale 확인 |
 | `❌ 자격증명이 거부됐습니다` | `.env` 의 키가 틀렸습니다. **`.env` 를 지우고 `init.py` 를 다시** 돌리세요 |

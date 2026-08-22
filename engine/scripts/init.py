@@ -43,7 +43,7 @@ def write_env() -> dict:
 
     print("\n── MinIO 접속 정보 ──")
     print("홈서버에 MinIO 를 아직 안 올렸다면 Ctrl-C 로 멈추고 먼저 올리세요.")
-    print("(README '2. 무거운 파일 저장소(MinIO) 올리기' 참고)\n")
+    print("(README 의 MinIO 절 참고)\n")
     vals = {
         "S3_ENDPOINT_URL": ask("MinIO 주소", "http://localhost:9000"),
         "S3_BUCKET": ask("버킷 이름", "my-wiki"),
@@ -60,7 +60,8 @@ def write_env() -> dict:
 
 
 def load_env() -> dict:
-    vals = {}
+    vals: dict = {}
+    risky: list = []
     for line in ENV.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
@@ -71,8 +72,20 @@ def load_env() -> dict:
         try:
             parts = shlex.split(v, comments=True)
         except ValueError:
-            parts = [v.strip()]
+            # 따옴표가 안 닫힌 줄 — 남은 인용부호를 값에 섞어 넣지 않는다
+            parts = [v.strip().strip("\"'")]
         vals[k.strip()] = parts[0] if parts else ""
+
+        # 손으로 쓴 unquoted 값 경고. 셸(`. ./.env`)은 여기서 치환·분리를 하는데
+        # 이 파서는 안 하므로, 두 도구가 서로 다른 값을 보게 된다 — 조용히 어긋나는 자리다.
+        bare = v.strip()
+        if bare[:1] not in ("'", '"') and any(c in bare for c in "$`\\ \t#"):
+            risky.append(k.strip())
+    if risky:
+        print(f"⚠️  .env 의 값에 따옴표가 없습니다: {', '.join(risky)}")
+        print("   공백·$·백틱·# 이 든 값은 작은따옴표로 감싸세요 — 예: KEY='se$cr et'")
+        print("   안 감싸면 다른 도구(셸로 읽음)와 값이 달라져, 점검은 통과하는데 업로드만 실패합니다.")
+
     missing = [k for k in KEYS if not vals.get(k)]
     if missing:
         sys.exit(f"❌ .env 에 값이 비었습니다: {', '.join(missing)}")
@@ -85,7 +98,8 @@ def check_store(vals: dict) -> None:
         from botocore.config import Config
         from botocore.exceptions import ClientError
     except ImportError:
-        sys.exit("❌ boto3 가 없습니다:  pip install boto3 pyyaml")
+        sys.exit("❌ boto3 가 없습니다. 설치 방법은 README '2. 파이썬 패키지 설치' 를 보세요.\n"
+                 "   venv 를 만들었다면 활성화를 잊었을 수 있습니다:  source .venv/bin/activate")
 
     s3 = boto3.client(
         "s3",
