@@ -1,0 +1,28 @@
+# 자격증명 — 로컬 평문 OK, git 추적엔 금지
+.env
+.env.*
+!.env.example
+secrets/
+*.key
+*.pem
+
+# 무거운 원본 — 여기 두지 않는다는 뜻이지 버린다는 뜻이 아닙니다.
+# 원본 → MinIO 버킷 · md 정제본만 raw/ 에. 절차 = AGENTS.md §2-1
+*.xlsx
+*.xls
+*.csv
+*.pdf
+*.zip
+*.pptx
+*.docx
+*.hwp
+*.hwpx
+
+# 작은 표시 이미지는 예외 — 옵시디언에서 바로 보여야 합니다 (AGENTS.md §2-1)
+!wiki-vault/raw/assets/**
+
+# OS / 에디터
+.DS_Store
+.obsidian/
+*.swp
+__pycache__/
