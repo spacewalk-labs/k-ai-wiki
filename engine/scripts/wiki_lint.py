@@ -12,7 +12,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-import yaml
+try:
+    import yaml
+except ImportError:
+    sys.exit("❌ pyyaml 이 없습니다. 설치 방법은 README '0. 준비물' 을 보세요.\n"
+             "   보통은:  pip install boto3 pyyaml")
 
 WIKI_LINK = re.compile(r"\[\[([^\]|#]+)")
 FM = re.compile(r"\A---\n(.*?)\n---\n", re.S)
@@ -77,15 +81,29 @@ def strip_code(text: str) -> str:
 
 def raw_modified(root: Path) -> list[str]:
     """raw/ 는 append-only — 추가(A) 아닌 수정(M) 이력을 잡는다."""
+    def git(*args: str) -> str:
+        # `core.quotePath=false` 가 없으면 한글 파일명이 8진수 이스케이프로 나온다
+        # (`"\354\246\235..."`). 이 위키는 예시부터 전부 한글 파일명이라 그냥 못 읽는 출력이 된다.
+        return subprocess.run(["git", "-C", str(root), "-c", "core.quotePath=false", *args],
+                              capture_output=True, text=True, timeout=30, check=True).stdout
+
     try:
-        out = subprocess.run(
-            ["git", "-C", str(root), "log", "--diff-filter=M",
-             "--format=", "--name-only", "--", "raw/"],
-            capture_output=True, text=True, timeout=30, check=True,
-        ).stdout
+        out = git("log", "--diff-filter=M", "--format=", "--name-only", "--", "raw/")
+        # git 이 주는 경로는 **레포 루트** 기준인데 나머지 findings 는 vault 루트 기준이다.
+        # 섞어 내보내면 같은 리포트 안에서 경로 체계가 둘이 된다.
+        top = git("rev-parse", "--show-toplevel").strip()
     except (subprocess.SubprocessError, OSError):
         return []
-    return sorted({ln for ln in out.split("\n")
+
+    prefix = ""
+    try:
+        rel = root.resolve().relative_to(Path(top).resolve())
+        prefix = "" if rel == Path(".") else f"{rel.as_posix()}/"
+    except ValueError:
+        pass
+
+    return sorted({ln[len(prefix):] if prefix and ln.startswith(prefix) else ln
+                   for ln in out.split("\n")
                    if ln.strip() and not ln.endswith("README.md")})
 
 

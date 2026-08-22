@@ -15,6 +15,7 @@
 """
 import getpass
 import os
+import shlex
 import sys
 import uuid
 from pathlib import Path
@@ -42,14 +43,17 @@ def write_env() -> dict:
 
     print("\n── MinIO 접속 정보 ──")
     print("홈서버에 MinIO 를 아직 안 올렸다면 Ctrl-C 로 멈추고 먼저 올리세요.")
-    print("(README '3. 무거운 파일 저장소' 참고)\n")
+    print("(README '2. 무거운 파일 저장소(MinIO) 올리기' 참고)\n")
     vals = {
         "S3_ENDPOINT_URL": ask("MinIO 주소", "http://localhost:9000"),
         "S3_BUCKET": ask("버킷 이름", "my-wiki"),
         "S3_ACCESS_KEY_ID": ask("Access Key"),
         "S3_SECRET_ACCESS_KEY": ask("Secret Key (입력해도 화면에 안 보입니다)", secret=True),
     }
-    ENV.write_text("".join(f"{k}={v}\n" for k, v in vals.items()), encoding="utf-8")
+    # 🔴 반드시 인용한다. `.env` 는 다른 도구들이 `set -a; . ./.env` 로 **셸에 먹여** 읽으므로,
+    # 인용 없이 쓰면 비밀번호의 `$`·공백·백틱을 셸이 해석해 값이 조용히 달라진다.
+    # 그러면 init.py 는 "성공"을 찍는데 정작 업로더는 403 으로 죽는다(원인 표시도 엉뚱해진다).
+    ENV.write_text("".join(f"{k}={shlex.quote(v)}\n" for k, v in vals.items()), encoding="utf-8")
     ENV.chmod(0o600)
     print(f"\n✅ {ENV} 를 만들었습니다 (권한 600, git 추적 안 됨)")
     return vals
@@ -59,9 +63,16 @@ def load_env() -> dict:
     vals = {}
     for line in ENV.read_text(encoding="utf-8").splitlines():
         line = line.strip()
-        if line and not line.startswith("#") and "=" in line:
-            k, v = line.split("=", 1)
-            vals[k.strip()] = v.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        # 셸과 **같은 규칙**으로 읽는다 — 따옴표를 벗기고 인라인 주석(`# …`)을 뗀다.
+        # 두 파서가 갈리면 `.env.example` 을 그대로 복사한 사람이 주석까지 버킷 이름으로 쓰게 된다.
+        try:
+            parts = shlex.split(v, comments=True)
+        except ValueError:
+            parts = [v.strip()]
+        vals[k.strip()] = parts[0] if parts else ""
     missing = [k for k in KEYS if not vals.get(k)]
     if missing:
         sys.exit(f"❌ .env 에 값이 비었습니다: {', '.join(missing)}")
@@ -87,15 +98,35 @@ def check_store(vals: dict) -> None:
     bucket = vals["S3_BUCKET"]
 
     print(f"\n── 저장소 점검 ({vals['S3_ENDPOINT_URL']} / {bucket}) ──")
-    try:
-        s3.head_bucket(Bucket=bucket)
-        print(f"  버킷 있음: {bucket}")
-    except ClientError:
-        s3.create_bucket(Bucket=bucket)
-        print(f"  버킷 만듦: {bucket}")
 
-    s3.put_bucket_versioning(Bucket=bucket, VersioningConfiguration={"Status": "Enabled"})
-    status = s3.get_bucket_versioning(Bucket=bucket).get("Status")
+    def bail(e) -> None:
+        """입문자가 첫 실행에서 가장 자주 밟는 두 실패를 한글 한 줄로 돌려준다."""
+        name = type(e).__name__
+        code = getattr(e, "response", {}).get("Error", {}).get("Code", "")
+        if "Endpoint" in name or "Connect" in name:
+            sys.exit(f"❌ MinIO 에 닿지 않습니다: {vals['S3_ENDPOINT_URL']}\n"
+                     "   · 주소·포트가 맞는지, MinIO 가 떠 있는지 (docker compose ps)\n"
+                     "   · 다른 기기라면 Tailscale 이 연결돼 있는지\n"
+                     "   고치려면 .env 를 지우고 다시 실행하세요.")
+        if code in ("SignatureDoesNotMatch", "InvalidAccessKeyId", "AccessDenied", "403"):
+            sys.exit(f"❌ 자격증명이 거부됐습니다 ({code}).\n"
+                     "   .env 의 S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY 를 확인하세요.\n"
+                     "   고치려면 .env 를 지우고 다시 실행하세요.")
+        sys.exit(f"❌ 저장소 점검 실패 ({name} {code}): {e}")
+
+    try:
+        try:
+            s3.head_bucket(Bucket=bucket)
+            print(f"  버킷 있음: {bucket}")
+        except ClientError:
+            s3.create_bucket(Bucket=bucket)
+            print(f"  버킷 만듦: {bucket}")
+
+        s3.put_bucket_versioning(Bucket=bucket,
+                                 VersioningConfiguration={"Status": "Enabled"})
+        status = s3.get_bucket_versioning(Bucket=bucket).get("Status")
+    except Exception as e:      # noqa: BLE001 — 어떤 실패든 한글로 돌려준다
+        bail(e)
     if status != "Enabled":
         sys.exit(f"❌ versioning 이 안 켜집니다 (지금: {status}). "
                  "덮어쓰기가 원본을 지우게 되므로 여기서 멈춥니다.")
@@ -104,8 +135,11 @@ def check_store(vals: dict) -> None:
     # 양성 대조 — 넣고 되읽어 바이트가 같은지
     key = f"_init-check/{uuid.uuid4().hex}.txt"
     body = b"k-ai-wiki init check"
-    s3.put_object(Bucket=bucket, Key=key, Body=body)
-    got = s3.get_object(Bucket=bucket, Key=key)["Body"].read()
+    try:
+        s3.put_object(Bucket=bucket, Key=key, Body=body)
+        got = s3.get_object(Bucket=bucket, Key=key)["Body"].read()
+    except Exception as e:      # noqa: BLE001
+        bail(e)
     if got != body:
         sys.exit("❌ 되읽은 내용이 올린 것과 다릅니다. 저장소 설정을 확인하세요.")
     print("  쓰기·읽기: OK (되읽은 바이트 일치)")

@@ -13,8 +13,9 @@
 
 ## 스크립트
 
-대상 vault 경로는 모두 `WIKI_ROOT` 환경변수를 봅니다. 기본값은 이 레포의 `wiki-vault/` 라
-보통은 건드릴 일이 없습니다.
+`build_index.py` 와 `wiki_lint.py` 는 대상 vault 경로를 `WIKI_ROOT` 환경변수에서 읽습니다.
+기본값이 이 레포의 `wiki-vault/` 라 보통은 건드릴 일이 없습니다.
+(`init.py` 는 이 레포 기준으로 고정이고, `assets_upload.py` 는 vault 를 보지 않습니다.)
 
 ### `init.py` — 첫 실행
 
@@ -34,7 +35,8 @@ python3 engine/scripts/wiki_lint.py --quiet    # 문제 있을 때만 (cron 용)
 ```
 
 **기계가 확실히 아는 것만 잡습니다** — 깨진 `[[링크]]`, 유입 링크 없는 고아, frontmatter 누락,
-`raw/` 수정(append-only 위반), `index.md` 누락. 종료코드 = 발견 건수(0 = 깨끗).
+`raw/` 수정(append-only 위반), `index.md` 누락.
+종료코드 = 발견 건수(0 = 깨끗, 125 건 이상은 125 로 묶임).
 
 판단이 필요한 것(모순·낡은 주장·누락 상호참조·데이터 공백)은 **잡지 않고 목록만 넘깁니다.**
 규칙으로 흉내내면 오탐이 나고, **오탐 한 번이면 리포트 전체를 안 보게 됩니다.**

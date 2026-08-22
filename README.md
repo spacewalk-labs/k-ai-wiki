@@ -29,8 +29,27 @@
 ### 0. 준비물
 
 - **1강에서 만든 홈서버** (Docker 가 도는 리눅스 박스)
-- Python 3.10+ 와 패키지 두 개: `pip install boto3 pyyaml`
+- **Python 3.10 이상** 과 패키지 두 개 (`boto3`·`pyyaml`)
 - Claude Code (또는 같은 방식으로 스킬을 읽는 에이전트)
+
+```bash
+python3 --version          # 3.10 이상이어야 합니다
+pip install boto3 pyyaml
+```
+
+> ⚠️ **`error: externally-managed-environment` 가 뜨면** 잘못한 게 아닙니다.
+> 요즘 우분투·데비안은 시스템 파이썬에 직접 설치하는 걸 막습니다. 셋 중 하나로 가세요.
+>
+> ```bash
+> # ① 배포판 패키지로 (가장 간단)
+> sudo apt install -y python3-boto3 python3-yaml
+>
+> # ② 이 폴더 전용 가상환경으로 (가장 깔끔 — 다음부터 python3 대신 .venv/bin/python 을 씁니다)
+> python3 -m venv .venv && .venv/bin/pip install boto3 pyyaml
+>
+> # ③ 그냥 밀어붙이기 (빠르지만 시스템 파이썬을 건드립니다)
+> pip install --break-system-packages boto3 pyyaml
+> ```
 
 ### 1. 클론하고 **내 레포로** 만들기
 
@@ -41,7 +60,7 @@ cd my-wiki
 # 여기가 중요합니다 — 남의 히스토리를 끊고 내 위키로 다시 시작합니다
 rm -rf .git
 git init -b main
-git add -A && git commit -m "내 위키 시작"
+git add . && git commit -m "내 위키 시작"
 ```
 
 > 🔴 **GitHub 에 올릴 때는 반드시 Private 으로 만드세요.**
@@ -67,8 +86,9 @@ services:
     volumes:
       - ./data:/data
     ports:
-      - "9000:9000"    # API — 이 위키가 쓰는 포트
-      - "9001:9001"    # 웹 콘솔 — 브라우저로 파일을 눈으로 볼 때
+      # 앞의 127.0.0.1 이 핵심입니다 — 이 기기 안에서만 열립니다
+      - "127.0.0.1:9000:9000"    # API — 이 위키가 쓰는 포트
+      - "127.0.0.1:9001:9001"    # 웹 콘솔 — 브라우저로 파일을 눈으로 볼 때
     restart: unless-stopped
 ```
 
@@ -76,8 +96,14 @@ services:
 cd ~/minio && docker compose up -d
 ```
 
-> 🔒 **포트를 인터넷에 열지 마세요.** Tailscale 로 들어와서 쓰면 충분합니다.
-> 공유기 포트포워딩은 하지 않습니다.
+> 🔒 **`127.0.0.1:` 을 빼지 마세요.** 그냥 `"9000:9000"` 으로 두면 **같은 공유기에 붙은 아무 기기나**
+> 여러분의 저장소에 닿습니다. 다른 기기에서 쓰고 싶으면 포트를 여는 게 아니라
+> **Tailscale 로 그 홈서버에 들어와서** 씁니다. 공유기 포트포워딩은 하지 않습니다.
+
+> 🔑 **위 `MINIO_ROOT_*` 는 관리자 계정입니다 — 위키에 그대로 쓰지 마세요.**
+> 콘솔(`http://localhost:9001`)에 로그인해 **Access Keys → Create** 로 키를 하나 더 만들고,
+> 다음 단계에는 **그 키**를 넣으세요. 그래야 `.env` 가 새더라도 저장소 전체의 관리자 권한까지
+> 넘어가지 않습니다.
 
 ### 3. 첫 실행
 
@@ -116,6 +142,8 @@ wiki-vault/          ★ 여기 안이 지식입니다. 옵시디언은 이 폴�
   log.md               타임라인
   gaps.md              "증거가 아직 없는 주장" 목록 = 다음에 모을 것
   raw/                 불변 증거 — 넣은 뒤에는 고치지 않습니다
+    ingest/              투입한 자료   ·   interviews/  인터뷰 전문
+    assets/              작은 스크린샷 (무거운 원본은 여기가 아니라 MinIO)
   wiki/                에이전트가 쓰고 유지하는 지식 페이지
 
 engine/scripts/      도구 (vault 밖이라 옵시디언에 안 보입니다)
@@ -136,13 +164,35 @@ engine/scripts/      도구 (vault 밖이라 옵시디언에 안 보입니다)
 
 | 증상 | 원인·해결 |
 |---|---|
+| `error: externally-managed-environment` | 0단계의 ①②③ 중 하나로 (README 맨 위) |
+| `ModuleNotFoundError: No module named 'yaml'` 또는 `'boto3'` | 같은 원인 — 0단계의 설치가 안 끝났습니다 |
 | `자격증명이 주입되지 않았습니다` | `set -a; . ./.env; set +a` 를 먼저. `.env` 가 없으면 `init.py` |
-| `boto3 가 없습니다` | `pip install boto3 pyyaml` |
-| MinIO 주소가 안 풀림 | Tailscale 이 연결돼 있는지 먼저 확인 |
-| 색인이 `❌ 설명이 N건 사라집니다` | 손으로 쓴 설명이 지워질 상황이라 **일부러 멈춘 것**입니다. 그 항목을 확인하고, 정말 재생성이 맞으면 `--force` |
+| `❌ MinIO 에 닿지 않습니다` | 주소·포트 오타이거나 MinIO 가 안 떠 있습니다 (`docker compose ps`). 다른 기기면 Tailscale 확인 |
+| `❌ 자격증명이 거부됐습니다` | `.env` 의 키가 틀렸습니다. **`.env` 를 지우고 `init.py` 를 다시** 돌리세요 |
+| `❌ 쓰지 않았습니다 — 설명이 N건 사라집니다` | 손으로 쓴 설명이 지워질 상황이라 **일부러 멈춘 것**입니다. 함께 출력된 항목명을 확인하고, 정말 재생성이 맞으면 `--force` |
 | 위키가 안 쌓임 | 정상입니다. **`/wiki-upload` 를 부르지 않으면 아무것도 안 들어옵니다** — 자동 수집은 없습니다 |
 
+> 🔧 **`.env` 를 손으로 고칠 때는 값을 작은따옴표로 감싸세요** (`S3_SECRET_ACCESS_KEY='se$cret'`).
+> 감싸지 않으면 비밀번호 속 `$`·공백을 셸이 먹어 버려서, **점검은 통과하는데 업로드만 실패하는**
+> 헷갈리는 상태가 됩니다. `init.py` 가 만든 `.env` 는 이미 감싸져 있습니다.
+
 ---
+
+## 🔴 백업 — 이것만은 오늘 해 두세요
+
+이 위키는 시간이 지날수록 **다시 만들 수 없는 것**이 됩니다. 그런데 기본 상태로는
+**홈서버 디스크 한 장**에만 존재합니다.
+
+- **MinIO 의 versioning 은 백업이 아닙니다.** 같은 디스크 안의 이전 버전일 뿐이라,
+  디스크가 죽으면 원본과 함께 죽습니다. 실수로 덮어썼을 때 되살리는 용도입니다.
+- **위키 본문(git)** — GitHub 에 **Private** 레포를 만들어 `git push` 해 두세요.
+  이것 하나로 텍스트 전부가 다른 곳에 복제됩니다.
+  ```bash
+  git remote add origin git@github.com:<내계정>/<내위키>.git
+  git push -u origin main
+  ```
+- **무거운 원본(MinIO)** — `~/minio/data` 폴더를 주기적으로 외장 디스크나 다른 기기로
+  복사해 두세요. 여기까지 하면 디스크가 죽어도 잃는 게 없습니다.
 
 ## 왜 이렇게 만들었나 (읽으면 더 잘 쓰게 되는 것들)
 

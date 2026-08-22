@@ -31,10 +31,14 @@ import unicodedata
 import uuid
 import zipfile
 
-import boto3
-from botocore.config import Config
-from botocore.exceptions import ClientError
-from boto3.s3.transfer import TransferConfig
+try:
+    import boto3
+    from botocore.config import Config
+    from botocore.exceptions import ClientError
+    from boto3.s3.transfer import TransferConfig
+except ImportError:
+    sys.exit("❌ boto3 가 없습니다. 설치 방법은 README '0. 준비물' 을 보세요.\n"
+             "   보통은:  pip install boto3 pyyaml")
 
 CHUNK = 1 << 22                       # 4MiB — 해시 스트리밍
 MULTIPART_THRESHOLD = 64 * 1024 * 1024

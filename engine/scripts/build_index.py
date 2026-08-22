@@ -147,8 +147,8 @@ def main() -> int:
 
     # 설명 회수는 `- [제목](경로) — 설명` 한 줄 형태만 잡는다. 한 줄에 여러 파일을 묶은
     # 큐레이션(`- ✅ [A](..) · [B](..) — 설명`)이나 안내 blockquote 는 회수되지 않아
-    # 재생성하면 사라진다 — 2026-08-08 실제로 26건이 '설명 없음' 이 됐다.
-    # README 가 "사람이 쓴 설명을 덮어쓰지 않는다"고 약속하므로, 손실이면 쓰지 않는다.
+    # 재생성하면 사라진다. engine/README 가 "사람이 쓴 설명을 덮어쓰지 않는다"고
+    # 약속하므로, 손실이 생기면 아예 쓰지 않는다.
     lost = lost_descriptions(block, current)
     if lost and not args.force:
         print(f"❌ 쓰지 않았습니다 — 설명이 {len(lost)}건 사라집니다 ({root})", file=sys.stderr)

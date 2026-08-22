@@ -18,8 +18,10 @@ secrets/
 *.hwp
 *.hwpx
 
-# 작은 표시 이미지는 예외 — 옵시디언에서 바로 보여야 합니다 (AGENTS.md §2-1)
-!wiki-vault/raw/assets/**
+# 작은 표시 이미지(png·jpg 등)는 애초에 위 목록에 없어 그냥 추적됩니다 — 예외가 필요 없습니다.
+# 🔴 `!wiki-vault/raw/assets/**` 같은 통짜 예외를 두지 마세요.
+#    그러면 위에서 막은 pdf·zip·xlsx 까지 assets/ 안에서 되살아나, 정확히 막으려던 사고
+#    (레포 비대·GitHub 100MB 제한)가 그 폴더에서만 조용히 일어납니다.
 
 # OS / 에디터
 .DS_Store
