@@ -7,7 +7,7 @@ secrets/
 *.pem
 
 # 무거운 원본 — 여기 두지 않는다는 뜻이지 버린다는 뜻이 아닙니다.
-# 원본 → MinIO 버킷 · md 정제본만 raw/ 에. 절차 = AGENTS.md §2-1
+# 원본 → MinIO 버킷 · md 정제본만 raw/ 에. 절차 = AGENTS.md "증거 보존"
 *.xlsx
 *.xls
 *.csv
