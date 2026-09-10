@@ -2,7 +2,7 @@
 """
 assets_upload.py — 임의의 자료 폴더를 MinIO 에 규약대로 적재하는 범용 업로더.
 
-`AGENTS.md §2-1` 이 정한 자산 규약(`{namespace}/{YYYY-MM}/{slug}/`)의 **실행 도구**다.
+`engine/README.md`가 정한 자산 규약(`{namespace}/{YYYY-MM}/{slug}/`)의 **실행 도구**다.
 소스·명명 규칙을 모른 채 폴더 하나만 받는다.
 
 핵심 계약 (전부 실측으로 값이 증명된 것들 — README 가 근거를 적는다):
@@ -438,7 +438,7 @@ def rows_from_remote(s3, bucket, prefix, remote, local_by_key, meta_cache, manif
 
 # ---------- main ----------
 def main():
-    ap = argparse.ArgumentParser(description="MinIO 범용 자산 업로더 (AGENTS.md §2-1)")
+    ap = argparse.ArgumentParser(description="MinIO 범용 자산 업로더 (engine/README.md)")
     ap.add_argument("--namespace", required=True, help="자료가 속한 주제 영역 (예: 홈서버, 학습, 재무). 기존 값을 먼저 볼 것")
     ap.add_argument("--slug", required=True, help="자료 묶음 slug (kebab-case)")
     ap.add_argument("--month", default=datetime.date.today().strftime("%Y-%m"),

@@ -23,7 +23,7 @@ FM = re.compile(r"\A---\n(.*?)\n---\n", re.S)
 FENCE = re.compile(r"^\s*(```|~~~)", re.M)
 INLINE_CODE = re.compile(r"`[^`]*`")
 
-# wiki/ 페이지에 요구되는 frontmatter (AGENTS.md §3)
+# wiki/ 페이지에 요구되는 frontmatter (gardener 스킬 계약)
 REQUIRED_FM = ("updated", "tags", "sources")
 
 # 위키 자체를 설명하는 발판 문서. 지식 페이지가 아니다 —
